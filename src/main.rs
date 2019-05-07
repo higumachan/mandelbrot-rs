@@ -1,3 +1,5 @@
+#![feature(test)]
+
 use num::Complex;
 use image::ColorType;
 use image::png::PNGEncoder;
@@ -104,26 +106,7 @@ fn main() {
     let mut pixels = vec![0; bounds.0 * bounds.1];
 
     //render(&mut pixels, bounds, upper_left, lower_right);
-    let threads = 8;
-    let rows_per_band = bounds.1 / threads + 1;
-    {
-        let bands: Vec<&mut [u8]> =
-            pixels.chunks_mut(rows_per_band * bounds.0).collect();
-
-        crossbeam::scope(|spawner| {
-            for (i, band) in bands.into_iter().enumerate() {
-                let top = rows_per_band * i;
-                let height = band.len() / bounds.0;
-                let band_bounds = (bounds.0, height);
-                let band_upper_left = pixel_to_point(bounds, (0, top), upper_left, lower_right);
-                let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height), upper_left, lower_right);
-
-                spawner.spawn(move || {
-                    render(band, band_bounds, band_upper_left, band_lower_right);
-                });
-            }
-        });
-    }
+    render_mp(&mut pixels, bounds, upper_left, lower_right);
 
     write_image("nadeko.png", &pixels, bounds).expect("error write PNG file");
 }
@@ -134,4 +117,36 @@ fn test_pixel_to_point() {
                               Complex { re: -1.0, im: 1.0 },
                              Complex {re: 1.0, im: -1.0},
     ), Complex { re: -0.5, im: -0.5})
+}
+
+
+extern crate test;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+
+    #[bench]
+    fn bench_render(b: &mut Bencher) {
+        let bounds = (1000, 750);
+        let upper_left = Complex { re: -1.20, im:0.35 };
+        let lower_right = Complex { re: -1.0, im: 0.20 };
+
+        let mut pixels = vec![0; bounds.0 * bounds.1];
+
+        b.iter(|| render(&mut pixels, bounds, upper_left, lower_right));
+    }
+
+    #[bench]
+    fn bench_render_mp(b: &mut Bencher) {
+        let bounds = (1000, 750);
+        let upper_left = Complex { re: -1.20, im:0.35 };
+        let lower_right = Complex { re: -1.0, im: 0.20 };
+
+        let mut pixels = vec![0; bounds.0 * bounds.1];
+
+        b.iter(|| render_mp(&mut pixels, bounds, upper_left, lower_right));
+    }
 }
